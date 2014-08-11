@@ -131,6 +131,24 @@
        (map (partial extensions/dereference sync))
        (filter #(= (:state (:content %)) :idle))))
 
+(defn seal-resource?*
+  [complete? same-task? peers n peer-state]
+  (let [state (if (and (>= (:waiting peers) (dec n))
+                       (zero? (:sealing peers))
+                       (= (:state peer-state) :active))
+                (assoc peer-state :state :sealing)
+                (assoc peer-state :state :waiting))]
+    {:seal? (boolean (and (or (= (:state peer-state) :sealing)
+                              (= (:state state) :sealing))
+                          same-task?
+                          (not complete?)))
+     :update-state? (and same-task?
+                         (and (not (and (= (:state peer-state) :sealing)
+                                        (= (:state state) :waiting)))
+                              (not (= (:state peer-state) (:state state))))
+                         (not (and (= (:state state) :sealing) complete?)))
+     :next-state state}))
+
 (defmethod extensions/seal-resource? ZooKeeper
   [sync exhaust-node]
   (let [node-data (extensions/read-node sync exhaust-node)
@@ -140,23 +158,13 @@
         peer-state (:content (extensions/dereference sync state-path))
         same-task? (= (:task-node peer-state) (:task-node node-data))
         complete? (task-complete? sync (:task-node node-data))
-        state (if (and (>= (:waiting peers) (dec n))
-                       (zero? (:sealing peers))
-                       (= (:state peer-state) :active))
-                (assoc peer-state :state :sealing)
-                (assoc peer-state :state :waiting))]
+        result (seal-resource?* complete? same-task? peers n peer-state)
+        state (:next-state result)]
 
-    (when (and same-task?
-               (and (not (and (= (:state peer-state) :sealing)
-                              (= (:state state) :waiting)))
-                    (not (= (:state peer-state) (:state state))))
-               (not (and (= (:state state) :sealing) complete?)))
+    (when (:update-state? result)
       (extensions/create-at sync :peer-state (:id node-data) state))
 
-    {:seal? (boolean (and (or (= (:state peer-state) :sealing)
-                              (= (:state state) :sealing))
-                          same-task?
-                          (not complete?)))
+    {:seal? (:seal? result)
      :sealed? complete?
      :seal-node (:node/seal (:nodes node-data))
      :exhaust-node (:node/exhaust (:nodes node-data))}))
