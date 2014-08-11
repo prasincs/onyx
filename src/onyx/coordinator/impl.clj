@@ -132,22 +132,22 @@
        (filter #(= (:state (:content %)) :idle))))
 
 (defn seal-resource?*
-  [complete? same-task? peer-state {:keys [acking active waiting sealing]}]
+  [complete? same-task? current-state {:keys [acking active waiting sealing]}]
   (let [n (+ acking active waiting sealing)
         state (if (and (>= waiting (dec n))
                        (zero? sealing)
-                       (= (:state peer-state) :active))
-                (assoc peer-state :state :sealing)
-                (assoc peer-state :state :waiting))]
-    {:seal? (boolean (and (or (= (:state peer-state) :sealing)
-                              (= (:state state) :sealing))
+                       (= current-state :active))
+                :sealing
+                :waiting)]
+    {:seal? (boolean (and (or (= current-state :sealing)
+                              (= state :sealing))
                           same-task?
                           (not complete?)))
      :update-state? (and same-task?
-                         (and (not (and (= (:state peer-state) :sealing)
-                                        (= (:state state) :waiting)))
-                              (not (= (:state peer-state) (:state state))))
-                         (not (and (= (:state state) :sealing) complete?)))
+                         (and (not (and (= current-state :sealing)
+                                        (= state :waiting)))
+                              (not (= current-state state)))
+                         (not (and (= state :sealing) complete?)))
      :next-state state}))
 
 (defmethod extensions/seal-resource? ZooKeeper
@@ -158,11 +158,11 @@
         peer-state (:content (extensions/dereference sync state-path))
         same-task? (= (:task-node peer-state) (:task-node node-data))
         complete? (task-complete? sync (:task-node node-data))
-        result (seal-resource?* complete? same-task? peer-state peers)
+        result (seal-resource?* complete? same-task? (:state peer-state) peers)
         state (:next-state result)]
 
     (when (:update-state? result)
-      (extensions/create-at sync :peer-state (:id node-data) state))
+      (extensions/create-at sync :peer-state (:id node-data) (assoc peer-state :state state)))
 
     {:seal? (:seal? result)
      :sealed? complete?
