@@ -132,9 +132,10 @@
        (filter #(= (:state (:content %)) :idle))))
 
 (defn seal-resource?*
-  [complete? same-task? peers n peer-state]
-  (let [state (if (and (>= (:waiting peers) (dec n))
-                       (zero? (:sealing peers))
+  [complete? same-task? peer-state {:keys [acking active waiting sealing]}]
+  (let [n (+ acking active waiting sealing)
+        state (if (and (>= waiting (dec n))
+                       (zero? sealing)
                        (= (:state peer-state) :active))
                 (assoc peer-state :state :sealing)
                 (assoc peer-state :state :waiting))]
@@ -153,12 +154,11 @@
   [sync exhaust-node]
   (let [node-data (extensions/read-node sync exhaust-node)
         peers (n-peers sync (:task-node node-data))
-        n (+ (:acking peers) (:active peers) (:waiting peers) (:sealing peers))
         state-path (extensions/resolve-node sync :peer-state (:id node-data))
         peer-state (:content (extensions/dereference sync state-path))
         same-task? (= (:task-node peer-state) (:task-node node-data))
         complete? (task-complete? sync (:task-node node-data))
-        result (seal-resource?* complete? same-task? peers n peer-state)
+        result (seal-resource?* complete? same-task? peer-state peers)
         state (:next-state result)]
 
     (when (:update-state? result)
