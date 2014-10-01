@@ -23,9 +23,9 @@
                  [clj-http "0.9.1"]
                  [ring "1.2.2" :exclusions [joda-time]]
                  [dire "0.5.1"]]
+  :java-source-paths ["src/main/java"]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]
                    :plugins [[lein-midje "3.1.1"]
                              [codox "0.8.8"]]}
              :circle-ci {:jvm-opts ["-Xmx4g"]}}
   :codox {:output-dir "doc/api"})
-
