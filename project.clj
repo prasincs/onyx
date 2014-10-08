@@ -26,6 +26,7 @@
   :java-source-paths ["src/main/java"]
   :profiles {:dev {:dependencies [[midje "1.6.3"]]
                    :plugins [[lein-midje "3.1.1"]
-                             [codox "0.8.8"]]}
+                             [codox "0.8.8"]
+                             [lein-javadoc "0.1.1"]]}
              :circle-ci {:jvm-opts ["-Xmx4g"]}}
   :codox {:output-dir "doc/api"})
